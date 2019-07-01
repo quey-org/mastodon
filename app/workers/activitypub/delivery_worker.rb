@@ -17,13 +17,15 @@ class ActivityPub::DeliveryWorker
     @json           = json
     @source_account = Account.find(source_account_id)
     @inbox_url      = inbox_url
+    @performed      = false
 
     perform_request
-
-    failure_tracker.track_success!
-  rescue => e
-    failure_tracker.track_failure!
-    raise e.class, "Delivery failed for #{inbox_url}: #{e.message}", e.backtrace[0]
+  ensure
+    if @performed
+      failure_tracker.track_success!
+    else
+      failure_tracker.track_failure!
+    end
   end
 
   private
@@ -38,6 +40,8 @@ class ActivityPub::DeliveryWorker
     light = Stoplight(@inbox_url) do
       build_request.perform do |response|
         raise Mastodon::UnexpectedResponseError, response unless response_successful?(response) || response_error_unsalvageable?(response)
+
+        @performed = true
       end
     end
 
